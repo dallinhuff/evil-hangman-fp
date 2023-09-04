@@ -6,6 +6,7 @@ import scala.io.StdIn.readLine
 import scala.util.Try
 
 object EvilHangmanApp:
+
   /**
    * create a HangmanGame from the supplied command line arguments (or provide defaults)
    * and play the game until the user wins/loses
@@ -33,21 +34,22 @@ object EvilHangmanApp:
   private def create(filename: String, length: Int, guess: Int): Either[String, EvilHangmanGame] =
     val source = Source.fromFile(filename)
     Try[EvilHangmanGame]:
-      val words = source
-        .getLines()
-        .flatMap(_.split("\\s+"))
-        .filter(_.length == length)
-        .toSet
-        .map(_.toLowerCase)
-      EvilHangmanGame(words, "-".repeat(length), guess, Set[Char]())
+      val words = for
+        line <- source.getLines()
+        word <- line.split("\\s+") if word.length == length && word.nonEmpty
+      yield word.toLowerCase
+
+      if words.isEmpty then
+        throw new IllegalArgumentException(s"Not enough words of length $length.")
+      else
+        EvilHangmanGame(words.toSet, "-".repeat(length), guess, Set[Char]())
     .fold(
       err =>
         source.close()
-        println(err)
-        Left(s"Couldn't create game from dictionary: $filename"),
-      g =>
+        Left(s"Couldn't create game from dictionary: $filename\n${err.getMessage}"),
+      game =>
         source.close()
-        Right(g)
+        Right(game)
     )
 
   /**
