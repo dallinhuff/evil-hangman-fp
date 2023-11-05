@@ -1,7 +1,10 @@
 package com.dallinhuff.evilhangman
 
+import GuessResult.*
+
 /**
  * An immutable snapshot of an evil hangman game
+ *
  * @param words all words that the "secret word" could possibly be
  * @param pattern the word the user is trying to fill in
  * @param guessesLeft the number of incorrect guesses the user can make before losing
@@ -14,17 +17,15 @@ case class EvilHangmanGame(words: Set[String], pattern: String, guessesLeft: Int
    * @param guess the letter to guess
    * @return the result of making that guess (an error string, an end-game reporting string, or a new game state)
    */
-  def guess(guess: Char): Either[String, Either[Either[String, String], EvilHangmanGame]] =
-    if guessesMade.contains(guess) then
-      Left(s"You already guessed $guess!")
+  def guess(guess: Char): GuessResult =
+    if guessesMade.contains(guess) then Invalid(s"You already guessed $guess!")
     else
       val (pattern, words) = bestPattern(guess)
-      if !pattern.contains('-') then
-        Right(Left(Right(pattern)))
+      if !pattern.contains('-') then Solved(pattern)
       else
         val nGuess = if pattern == this.pattern then guessesLeft - 1 else guessesLeft
-        if nGuess == 0 then Right(Left(Left(words.head)))
-        else Right(Right(EvilHangmanGame(words, pattern, nGuess, guessesMade + guess)))
+        if nGuess == 0 then Lost(words.head)
+        else Next(EvilHangmanGame(words, pattern, nGuess, guessesMade + guess))
 
   /**
    * given a guess, find the best new pattern and the

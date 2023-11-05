@@ -4,6 +4,7 @@ import scala.annotation.tailrec
 import scala.io.Source
 import scala.io.StdIn.readLine
 import scala.util.Try
+import GuessResult.*
 
 object EvilHangmanApp:
 
@@ -64,15 +65,15 @@ object EvilHangmanApp:
     println(game)
     val next = nextGuess
     game.guess(next) match
-      case Left(err) =>
+      case Invalid(err) =>
         println(s"\n$err")
         play(game)
-      case Right(Left(Left(solution))) =>
+      case Lost(solution) =>
         println(s"\nSorry, there are no $next's.\n")
         println(s"You lose! The word was $solution.")
-      case Right(Left(Right(solution))) =>
+      case Solved(solution) =>
         println(s"You win! The word was $solution.")
-      case Right(Right(newGame)) =>
+      case Next(newGame) =>
         if newGame.pattern == game.pattern then
           println(s"\nSorry, there are no $next's.")
         play(newGame)
