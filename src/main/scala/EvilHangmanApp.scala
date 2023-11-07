@@ -9,6 +9,9 @@ import com.monovore.decline.effect.CommandIOApp
 
 import scala.io.Source
 
+/**
+ * The CLI-app with all effectful/IO logic necessary to play EvilHangmanGame
+ */
 object EvilHangmanApp extends CommandIOApp(
   name = "evil-hangman",
   header = "A command-line evil hangman game",
@@ -16,11 +19,16 @@ object EvilHangmanApp extends CommandIOApp(
 ):
 
   override def main: Opts[IO[ExitCode]] =
-    (
-      Opts.option[String]("dictionary", "Name of the dictionary file", "d").withDefault("dict.txt"),
-      Opts.option[Int]("length", "Length of the word to use", "l").withDefault(7),
-      Opts.option[Int]("guess", "Number of guesses allowed", "g").withDefault(6)
-    ).tupled.map:
+    val opts = (
+      Opts.option[String]("dictionary", "Name of the dictionary file", "d")
+        .withDefault("dict.txt"),
+      Opts.option[Int]("length", "Length of the word to use", "l")
+        .withDefault(7),
+      Opts.option[Int]("guess", "Number of guesses allowed", "g")
+        .withDefault(6)
+    ).tupled
+
+    opts.map:
       case (filename, length, guess) =>
         for
           wordsE <- parseDictionary[IO](filename, length)
@@ -31,14 +39,7 @@ object EvilHangmanApp extends CommandIOApp(
             dict => play(EvilHangmanGame(dict, "-" * length, guess, Set.empty[Char]))
           )
         yield exitCode
-
-  /**
-   * attempt to create a set of words from a dictionary file
-   * @param name the name of the file to attempt to use as a dictionary
-   * @param length the length of the word to use in the hangman game
-   * @tparam F the effect to use
-   * @return either an error string or a set of strings to use as a game dictionary
-   */
+  
   private def parseDictionary[F[_] : Sync](name: String, length: Int): F[Either[String, Set[String]]] =
     Resource.fromAutoCloseable(Sync[F].blocking(Source.fromFile(name))).use: f =>
       val words = for
@@ -46,7 +47,11 @@ object EvilHangmanApp extends CommandIOApp(
         word <- line.split("\\s+") if word.length == length && word.nonEmpty
       yield word.toLowerCase
 
-      Sync[F].delay(Either.cond(words.nonEmpty, Set.from(words), s"Not enough words of length $length."))
+      Sync[F].delay(Either.cond(
+        words.nonEmpty,
+        Set.from(words),
+        s"Not enough words of length $length."
+      ))
 
   private def play(game: EvilHangmanGame): IO[ExitCode] =
     IO.defer:
@@ -63,7 +68,7 @@ object EvilHangmanApp extends CommandIOApp(
             IO.println(s"You lose! The word was $solution.") >>
             IO.pure(ExitCode.Success)
           case Solved(solution) =>
-            IO.println(s"You win! The word was $solution.") >>
+            IO.println(s"\nYou win! The word was $solution.") >>
             IO.pure(ExitCode.Error)
           case Next(newGame @ EvilHangmanGame(_, p, _, _)) =>
             p match
@@ -79,8 +84,12 @@ object EvilHangmanApp extends CommandIOApp(
         _ <- IO.print("Next guess: ")
         line <- IO.readLine
         trimmed <- IO.pure(line.trim)
-        letter <- IO(Option.when(trimmed.length == 1 && trimmed.charAt(0).isLetter)(trimmed))
+        letter <- IO(
+          Option.when(trimmed.length == 1 && trimmed.charAt(0).isLetter)(trimmed)
+        )
         result <- letter match
           case Some(l) => IO.pure(l.head.toLower)
-          case None => IO.println("Invalid guess! enter a single letter a-z") >> nextGuess
+          case None =>
+            IO.println("Invalid guess! enter a single letter a-z") >>
+            nextGuess
       yield result
