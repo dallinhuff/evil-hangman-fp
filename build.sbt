@@ -1,6 +1,6 @@
 ThisBuild / version := "0.1.0-SNAPSHOT"
 
-ThisBuild / scalaVersion := "3.3.0"
+ThisBuild / scalaVersion := "3.3.1"
 
 lazy val root = (project in file("."))
   .settings(
@@ -10,5 +10,7 @@ lazy val root = (project in file("."))
       "org.typelevel" %% "cats-effect"    % "3.5.0",
       "com.monovore"  %% "decline"        % "2.4.1",
       "com.monovore"  %% "decline-effect" % "2.4.1"
-    )
+    ),
+    assembly / assemblyJarName := "evil-hangman.jar"
   )
+

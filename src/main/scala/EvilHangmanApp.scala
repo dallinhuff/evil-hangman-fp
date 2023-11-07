@@ -34,12 +34,12 @@ object EvilHangmanApp extends CommandIOApp(
           wordsE <- parseDictionary[IO](filename, length)
           exitCode <- wordsE.fold(
             err =>
-              IO.println(s"Couldn't create game from dictionary: $filename\n$err") >>
+              IO.println(s"Couldn't create game from dictionary: $filename$err") >>
               IO.pure(ExitCode.Error),
             dict => play(EvilHangmanGame(dict, "-" * length, guess, Set.empty[Char]))
           )
         yield exitCode
-  
+
   private def parseDictionary[F[_] : Sync](name: String, length: Int): F[Either[String, Set[String]]] =
     Resource.fromAutoCloseable(Sync[F].blocking(Source.fromFile(name))).use: f =>
       val words = for
@@ -53,28 +53,22 @@ object EvilHangmanApp extends CommandIOApp(
         s"Not enough words of length $length."
       ))
 
-  private def play(game: EvilHangmanGame): IO[ExitCode] =
+  private def play(game: EvilHangmanGame, msg: String = ""): IO[ExitCode] =
     IO.defer:
       for
-        _ <- IO.print("\u001b[2J\u001b[H\n")
-        _ <- IO.println(game)
+        _ <- printGame(game, msg)
         next <- nextGuess
         result <- game.guess(next) match
-          case Invalid(err) =>
-            IO.println(s"\n$err") >>
-            play(game)
+          case Invalid(err) => play(game, s"$err")
           case Lost(solution) =>
-            IO.println(s"\nSorry, there are no $next's.\n") >>
-            IO.println(s"You lose! The word was $solution.") >>
+            printMessage(s"You lose! The word was $solution.") >>
             IO.pure(ExitCode.Success)
           case Solved(solution) =>
-            IO.println(s"\nYou win! The word was $solution.") >>
+            printMessage(s"You win! The word was $solution.") >>
             IO.pure(ExitCode.Error)
           case Next(newGame @ EvilHangmanGame(_, p, _, _)) =>
             p match
-              case game.pattern =>
-                IO.println(s"\nSorry, there are no $next's.") >>
-                play(newGame)
+              case game.pattern => play(newGame, s"Sorry, there are no $next's.")
               case _ => play(newGame)
       yield result
 
@@ -93,3 +87,12 @@ object EvilHangmanApp extends CommandIOApp(
             IO.println("Invalid guess! enter a single letter a-z") >>
             nextGuess
       yield result
+
+  private def printGame(game: EvilHangmanGame, msg: String = ""): IO[Unit] =
+    printMessage(msg, game.toString)
+
+  private def printMessage(msg: String, msg2: String = ""): IO[Unit] =
+    IO.println("\u001b[2J\u001b[H") >>
+    IO.println("EVIL HANGMAN") >>
+    IO.println(s"\n$msg\n") >>
+    IO.println(msg2)

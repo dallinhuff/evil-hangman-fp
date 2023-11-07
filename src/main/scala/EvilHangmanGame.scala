@@ -21,7 +21,7 @@ case class EvilHangmanGame(
       Invalid(s"You already guessed $guess!")
     else
       bestPattern(guess) match
-        case (p, _) if !pattern.contains('-') =>
+        case (pattern, _) if !pattern.contains('-') =>
           Solved(pattern)
         case (pattern, words) =>
           val nGuess = pattern match
