@@ -1,36 +1,46 @@
 package com.dallinhuff.evilhangman
 
-import cats.effect.{ExitCode, IO, IOApp, Resource, Sync}
 import GuessResult.{Invalid, Lost, Next, Solved}
+
+import cats.effect.{ExitCode, IO, Resource, Sync}
+import cats.syntax.all.*
+import com.monovore.decline.Opts
+import com.monovore.decline.effect.CommandIOApp
 
 import scala.io.Source
 
-object EvilHangmanApp extends IOApp:
+object EvilHangmanApp extends CommandIOApp(
+  name = "evil-hangman",
+  header = "A command-line evil hangman game",
+  version = "0.1.0"
+):
 
-  override def run(args: List[String]): IO[ExitCode] =
-    val filename = args.headOption.getOrElse("dict.txt")
-    val length = args.lift(1).getOrElse("7").toInt
-    val guess = args.lift(2).getOrElse("6").toInt
-
-    for
-      wordsE <- parseDictionary[IO](filename, length)
-      exitCode <- wordsE.fold(
-        err =>
-          IO.println(s"Couldn't create game from dictionary: $filename\n$err") >>
-          IO.pure(ExitCode.Error),
-        dict => play(EvilHangmanGame(dict, "-" * length, guess, Set.empty[Char]))
-      )
-    yield exitCode
+  override def main: Opts[IO[ExitCode]] =
+    (
+      Opts.option[String]("dictionary", "Name of the dictionary file", "d").withDefault("dict.txt"),
+      Opts.option[Int]("length", "Length of the word to use", "l").withDefault(7),
+      Opts.option[Int]("guess", "Number of guesses allowed", "g").withDefault(6)
+    ).tupled.map:
+      case (filename, length, guess) =>
+        for
+          wordsE <- parseDictionary[IO](filename, length)
+          exitCode <- wordsE.fold(
+            err =>
+              IO.println(s"Couldn't create game from dictionary: $filename\n$err") >>
+              IO.pure(ExitCode.Error),
+            dict => play(EvilHangmanGame(dict, "-" * length, guess, Set.empty[Char]))
+          )
+        yield exitCode
 
   /**
    * attempt to create a set of words from a dictionary file
-   * @param filename the name of the file to attempt to use as a dictionary
+   * @param name the name of the file to attempt to use as a dictionary
    * @param length the length of the word to use in the hangman game
    * @tparam F the effect to use
    * @return either an error string or a set of strings to use as a game dictionary
    */
-  private def parseDictionary[F[_] : Sync](filename: String, length: Int): F[Either[String, Set[String]]] =
-    Resource.fromAutoCloseable(Sync[F].blocking(Source.fromFile(filename))).use: f =>
+  private def parseDictionary[F[_] : Sync](name: String, length: Int): F[Either[String, Set[String]]] =
+    Resource.fromAutoCloseable(Sync[F].blocking(Source.fromFile(name))).use: f =>
       val words = for
         line <- f.getLines()
         word <- line.split("\\s+") if word.length == length && word.nonEmpty

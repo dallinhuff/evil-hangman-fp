@@ -7,6 +7,8 @@ lazy val root = (project in file("."))
     name := "EvilHangman",
     idePackagePrefix := Some("com.dallinhuff.evilhangman"),
     libraryDependencies ++= Seq(
-      "org.typelevel" %% "cats-effect" % "3.5.0"
+      "org.typelevel" %% "cats-effect"    % "3.5.0",
+      "com.monovore"  %% "decline"        % "2.4.1",
+      "com.monovore"  %% "decline-effect" % "2.4.1"
     )
   )
