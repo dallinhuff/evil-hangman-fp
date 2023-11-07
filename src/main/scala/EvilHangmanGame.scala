@@ -44,10 +44,7 @@ case class EvilHangmanGame(words: Set[String], pattern: String, guessesLeft: Int
             if currKey.count(_ == char) > bestKey.count(_ == char) then curr
             else best
           else best
-
-  /**
-   * a string representation of the current game state
-   */
+  
   override def toString: String =
     s"You have $guessesLeft ${if guessesLeft == 1 then "guess" else "guesses"} left\n" ++
     s"Word: $pattern\n" ++

@@ -1,92 +1,76 @@
 package com.dallinhuff.evilhangman
 
-import scala.annotation.tailrec
+import cats.effect.{ExitCode, IO, IOApp, Resource, Sync}
+import GuessResult.{Invalid, Lost, Next, Solved}
+
 import scala.io.Source
-import scala.io.StdIn.readLine
-import scala.util.Try
-import GuessResult.*
 
-object EvilHangmanApp:
+object EvilHangmanApp extends IOApp:
 
-  /**
-   * create a HangmanGame from the supplied command line arguments (or provide defaults)
-   * and play the game until the user wins/loses
-   * If the supplied arguments are bad or an error occurs when loading the dictionary file,
-   * print an the error
-   */
-  def main(args: Array[String]): Unit =
-    val (filename, length, guess) = args match
-      case Array(f, l, n) => (f, l.toInt, n.toInt)
-      case Array(f, l) => (f, l.toInt, 6)
-      case Array(f) => (f, 7, 6)
-      case _ => ("dict.txt", 7, 6)
+  override def run(args: List[String]): IO[ExitCode] =
+    val filename = args.headOption.getOrElse("dict.txt")
+    val length = args.lift(1).getOrElse("7").toInt
+    val guess = args.lift(2).getOrElse("6").toInt
 
-    create(filename, length, guess) match
-      case Left(errorMsg) => println(errorMsg)
-      case Right(game) => play(game)
+    for
+      wordsE <- parseDictionary[IO](filename, length)
+      exitCode <- wordsE.fold(
+        err =>
+          IO.println(s"Couldn't create game from dictionary: $filename\n$err") >>
+          IO.pure(ExitCode.Error),
+        dict => play(EvilHangmanGame(dict, "-" * length, guess, Set.empty[Char]))
+      )
+    yield exitCode
 
   /**
-   * attempt to create an instance of HangmanGame with the given CLI arguments
-   * @param filename the path to the file to use as the dictionary of possible words
-   * @param length the number of letters to have in the hangman word
-   * @param guess the number of incorrect guesses the user can make before losing
-   * @return an either with the game instance or a string explaining why creation failed
+   * attempt to create a set of words from a dictionary file
+   * @param filename the name of the file to attempt to use as a dictionary
+   * @param length the length of the word to use in the hangman game
+   * @tparam F the effect to use
+   * @return either an error string or a set of strings to use as a game dictionary
    */
-  private def create(filename: String, length: Int, guess: Int): Either[String, EvilHangmanGame] =
-    val source = Source.fromFile(filename)
-    Try[EvilHangmanGame]:
+  private def parseDictionary[F[_] : Sync](filename: String, length: Int): F[Either[String, Set[String]]] =
+    Resource.fromAutoCloseable(Sync[F].blocking(Source.fromFile(filename))).use: f =>
       val words = for
-        line <- source.getLines()
+        line <- f.getLines()
         word <- line.split("\\s+") if word.length == length && word.nonEmpty
       yield word.toLowerCase
 
-      if words.isEmpty then
-        throw new IllegalArgumentException(s"Not enough words of length $length.")
-      else
-        EvilHangmanGame(words.toSet, "-".repeat(length), guess, Set[Char]())
-    .fold(
-      err =>
-        source.close()
-        Left(s"Couldn't create game from dictionary: $filename\n${err.getMessage}"),
-      game =>
-        source.close()
-        Right(game)
-    )
+      Sync[F].delay(Either.cond(words.nonEmpty, Set.from(words), s"Not enough words of length $length."))
 
-  /**
-   * print the current game status and take the user's next guess
-   * print result of guess and repeat until the word is guessed
-   * or the user runs out of guesses
-   * @param game the current HangmanGame
-   */
-  @tailrec
-  private def play(game: EvilHangmanGame): Unit =
-    println()
-    println(game)
-    val next = nextGuess
-    game.guess(next) match
-      case Invalid(err) =>
-        println(s"\n$err")
-        play(game)
-      case Lost(solution) =>
-        println(s"\nSorry, there are no $next's.\n")
-        println(s"You lose! The word was $solution.")
-      case Solved(solution) =>
-        println(s"You win! The word was $solution.")
-      case Next(newGame) =>
-        if newGame.pattern == game.pattern then
-          println(s"\nSorry, there are no $next's.")
-        play(newGame)
+  private def play(game: EvilHangmanGame): IO[ExitCode] =
+    IO.defer:
+      for
+        _ <- IO.print("\u001b[2J\u001b[H\n")
+        _ <- IO.println(game)
+        next <- nextGuess
+        result <- game.guess(next) match
+          case Invalid(err) =>
+            IO.println(s"\n$err") >>
+            play(game)
+          case Lost(solution) =>
+            IO.println(s"\nSorry, there are no $next's.\n") >>
+            IO.println(s"You lose! The word was $solution.") >>
+            IO.pure(ExitCode.Success)
+          case Solved(solution) =>
+            IO.println(s"You win! The word was $solution.") >>
+            IO.pure(ExitCode.Error)
+          case Next(newGame @ EvilHangmanGame(_, p, _, _)) =>
+            p match
+              case game.pattern =>
+                IO.println(s"\nSorry, there are no $next's.") >>
+                play(newGame)
+              case _ => play(newGame)
+      yield result
 
-  /**
-   * get the next (valid) guess from stdin
-   * @return a single lowercase letter to use as the next guess
-   */
-  @tailrec
-  private def nextGuess: Char =
-    print("Next guess: ")
-    val line = readLine().trim
-    if line.length != 1 || !line.charAt(0).isLetter then
-      println("Invalid guess! enter a single letter a-z")
-      nextGuess
-    else line.charAt(0).toLower
+  private def nextGuess: IO[Char] =
+    IO.defer:
+      for
+        _ <- IO.print("Next guess: ")
+        line <- IO.readLine
+        trimmed <- IO.pure(line.trim)
+        letter <- IO(Option.when(trimmed.length == 1 && trimmed.charAt(0).isLetter)(trimmed))
+        result <- letter match
+          case Some(l) => IO.pure(l.head.toLower)
+          case None => IO.println("Invalid guess! enter a single letter a-z") >> nextGuess
+      yield result

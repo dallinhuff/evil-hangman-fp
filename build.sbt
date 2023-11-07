@@ -5,5 +5,8 @@ ThisBuild / scalaVersion := "3.3.0"
 lazy val root = (project in file("."))
   .settings(
     name := "EvilHangman",
-    idePackagePrefix := Some("com.dallinhuff.evilhangman")
+    idePackagePrefix := Some("com.dallinhuff.evilhangman"),
+    libraryDependencies ++= Seq(
+      "org.typelevel" %% "cats-effect" % "3.5.0"
+    )
   )
