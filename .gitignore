@@ -32,6 +32,9 @@ build/
 ### BSP ###
 .bsp/
 
+### Metals ###
+.metals/
+
 ### VS Code ###
 .vscode/
 

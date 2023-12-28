@@ -56,16 +56,16 @@ object EvilHangmanApp extends CommandIOApp(
   private def play(game: EvilHangmanGame, msg: String = ""): IO[ExitCode] =
     IO.defer:
       for
-        _ <- printGame(game, msg)
-        next <- nextGuess
+        _      <- printGame(game, msg)
+        next   <- nextGuess
         result <- game.guess(next) match
           case Invalid(err) => play(game, s"$err")
           case Lost(solution) =>
-            printMessage(s"You lose! The word was $solution.") >>
+            printMessage(s"You lose! The word was $solution.") *>
             IO.pure(ExitCode.Success)
           case Solved(solution) =>
-            printMessage(s"You win! The word was $solution.") >>
-            IO.pure(ExitCode.Error)
+            printMessage(s"You win! The word was $solution.") *>
+            IO.pure(ExitCode.Success)
           case Next(newGame @ EvilHangmanGame(_, p, _, _)) =>
             p match
               case game.pattern => play(newGame, s"Sorry, there are no $next's.")
@@ -75,16 +75,14 @@ object EvilHangmanApp extends CommandIOApp(
   private def nextGuess: IO[Char] =
     IO.defer:
       for
-        _ <- IO.print("Next guess: ")
-        line <- IO.readLine
+        _       <- IO.print("Next guess: ")
+        line    <- IO.readLine
         trimmed <- IO.pure(line.trim)
-        letter <- IO(
-          Option.when(trimmed.length == 1 && trimmed.charAt(0).isLetter)(trimmed)
-        )
-        result <- letter match
+        letter  <- IO(Option.when(trimmed.length == 1 && trimmed.charAt(0).isLetter)(trimmed))
+        result  <- letter match
           case Some(l) => IO.pure(l.head.toLower)
           case None =>
-            IO.println("Invalid guess! enter a single letter a-z") >>
+            IO.println("Invalid guess! enter a single letter a-z") *>
             nextGuess
       yield result
 
@@ -92,7 +90,7 @@ object EvilHangmanApp extends CommandIOApp(
     printMessage(msg, game.toString)
 
   private def printMessage(msg: String, msg2: String = ""): IO[Unit] =
-    IO.println("\u001b[2J\u001b[H") >>
-    IO.println("EVIL HANGMAN") >>
-    IO.println(s"\n$msg\n") >>
+    IO.println("\u001b[2J\u001b[H") *>
+    IO.println("EVIL HANGMAN") *>
+    IO.println(s"\n$msg\n") *>
     IO.println(msg2)
